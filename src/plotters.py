@@ -1,7 +1,6 @@
 import gc
 
 import matplotlib.pyplot as plt
-import numpy as np
 import torch
 
 from src.tools import freeze, linked_push, linked_sde_push, sde_push
@@ -63,31 +62,23 @@ def plot_pushed_random_class_images(XY_sampler, T, plot_n_samples=10, gray=False
 def plot_linked_pushed_images(X, Y, Ts, gray=False, plot_trajectory=True):
     n_row = len(Ts) + 2 if plot_trajectory else 3
     n_col = int(X.shape[0])
+    tr_list = [X]
 
     if plot_trajectory:
-        tr_list = linked_push(Ts, X, return_type="trajectory")
-        tr_list.append(Y)
-        imgs = (
-            torch.cat(tr_list)
-            .to("cpu")
-            .permute(0, 2, 3, 1)
-            .mul(0.5)
-            .add(0.5)
-            .numpy()
-            .clip(0, 1)
-        )
+        tr_list.extend(linked_push(Ts, X, return_type="trajectory"))
     else:
-        T_X = linked_push(Ts, X, return_type="T_X")
-        # print(f"[Debug] {T_X.shape=}")
-        imgs = (
-            torch.cat([X, T_X, Y])
-            .to("cpu")
-            .permute(0, 2, 3, 1)
-            .mul(0.5)
-            .add(0.5)
-            .numpy()
-            .clip(0, 1)
-        )
+        tr_list.append(linked_push(Ts, X, return_type="T_X"))
+
+    tr_list.append(Y)
+    imgs = (
+        torch.cat(tr_list)
+        .to("cpu")
+        .permute(0, 2, 3, 1)
+        .mul(0.5)
+        .add(0.5)
+        .numpy()
+        .clip(0, 1)
+    )
 
     fig, axes = plt.subplots(n_row, n_col, figsize=(1.5 * n_col, 1.5 * n_row), dpi=150)
     for i, ax in enumerate(axes.flatten()):
@@ -139,161 +130,22 @@ def plot_linked_pushed_random_class_images(
 
 
 # ========= ENOT(SDE) push =========
-
-
-# ==== need replace ====
-def plot_fixed_sde_trajectories(X, Y, T, n_steps_to_show=10, n_steps=10, gray=False):
-    freeze(T)
-
-    trajectory_index_step_size = n_steps // n_steps_to_show
-    with torch.no_grad():
-        trajectory = T(X)[0]
-        T_X = torch.cat(
-            (trajectory[:, ::trajectory_index_step_size], trajectory[:, -1][:, None]),
-            dim=1,
-        )
-        T_X = torch.transpose(T_X, 0, 1)[1:]
-
-        c, h, w = X.shape[1:]
-        imgs = (
-            torch.cat([X[None, :], T_X, Y[None, :]])
-            .reshape(-1, c, h, w)
-            .to("cpu")
-            .permute(0, 2, 3, 1)
-            .mul(0.5)
-            .add(0.5)
-            .numpy()
-            .clip(0, 1)
-        )
-
-    rows_with_steps = np.arange(n_steps + 1)[::trajectory_index_step_size].shape[0]
-    fig, axes = plt.subplots(2 + rows_with_steps, 10, figsize=(15, 20), dpi=150)
-
-    for i, ax in enumerate(axes.flatten()):
-        if not gray:
-            ax.imshow(imgs[i])
-        else:
-            ax.imshow(imgs[i], cmap="gray", vmin=0, vmax=1)
-        ax.get_xaxis().set_visible(False)
-        ax.set_yticks([])
-
-    axes[0, 0].set_ylabel("X", fontsize=24)
-    for i in range(rows_with_steps):
-        axes[i + 1, 0].set_ylabel(
-            f"T(X)_{(i+1)*trajectory_index_step_size}", fontsize=24
-        )
-    axes[-2, 0].set_ylabel("T(X)", fontsize=24)
-    axes[-1, 0].set_ylabel("Y", fontsize=24)
-
-    fig.tight_layout(pad=0.001)
-    torch.cuda.empty_cache()
-    gc.collect()
-    return fig, axes
-
-
-def plot_random_sde_trajectories(
-    X_sampler, Y_sampler, T, n_steps_to_show=10, n_steps=10, gray=False
-):
-    X, Y = X_sampler.sample(10), Y_sampler.sample(10)
-
-    return plot_fixed_sde_trajectories(X, Y, T, n_steps_to_show, n_steps, gray)
-
-
-def plot_several_fixed_sde_trajectories(
-    X, Y, T, n_steps_to_show=10, n_steps=10, gray=False
-):
-    freeze(T)
-
-    n_trajectories = 3
-    X = X[:4]
-    Y = Y[:4]
-
-    trajectory_index_step_size = n_steps // n_steps_to_show
-    with torch.no_grad():
-        trajectory = []
-        for i in range(n_trajectories):
-            trajectory.append(T(X)[0])
-
-        trajectory = torch.stack(trajectory, dim=1)
-        trajectory = trajectory.reshape(
-            trajectory.shape[0] * trajectory.shape[1],
-            trajectory.shape[2],
-            trajectory.shape[3],
-            trajectory.shape[4],
-            trajectory.shape[5],
-        )
-
-        T_X = torch.cat(
-            (trajectory[:, ::trajectory_index_step_size], trajectory[:, -1][:, None]),
-            dim=1,
-        )
-        T_X = torch.transpose(T_X, 0, 1)[1:]
-
-        c, h, w = X.shape[1:]
-        imgs = (
-            torch.cat(
-                [
-                    X.repeat_interleave(3, dim=0)[None, :],
-                    T_X,
-                    Y.repeat_interleave(3, dim=0)[None, :],
-                ]
-            )
-            .reshape(-1, c, h, w)
-            .to("cpu")
-            .permute(0, 2, 3, 1)
-            .mul(0.5)
-            .add(0.5)
-            .numpy()
-            .clip(0, 1)
-        )
-
-    rows_with_steps = np.arange(n_steps + 1)[::trajectory_index_step_size].shape[0]
-    fig, axes = plt.subplots(2 + rows_with_steps, 12, figsize=(15, 20), dpi=150)
-
-    for i, ax in enumerate(axes.flatten()):
-        if not gray:
-            ax.imshow(imgs[i])
-        else:
-            ax.imshow(imgs[i], cmap="gray", vmin=0, vmax=1)
-        ax.get_xaxis().set_visible(False)
-        ax.set_yticks([])
-
-    axes[0, 0].set_ylabel("X", fontsize=24)
-    for i in range(rows_with_steps):
-        axes[i + 1, 0].set_ylabel(
-            f"T(X)_{(i+1)*trajectory_index_step_size}", fontsize=24
-        )
-    axes[-2, 0].set_ylabel("T(X)", fontsize=24)
-    axes[-1, 0].set_ylabel("Y", fontsize=24)
-
-    fig.tight_layout(pad=0.001)
-    torch.cuda.empty_cache()
-    gc.collect()
-    return fig, axes
-
-
-def plot_several_random_sde_trajectories(
-    X_sampler, Y_sampler, T, n_steps_to_show=10, n_steps=10, gray=False
-):
-    X, Y = X_sampler.sample(10), Y_sampler.sample(10)
-
-    return plot_several_fixed_sde_trajectories(X, Y, T, n_steps_to_show, n_steps, gray)
-
-
-# ==============================
-
-
-# TODO: ENOT with trajectory
-# @torch.no_grad()
-# def plot_sde_pushed_images(X, Y, SDE, gray=False, plot_trajectory=True):
-#     pass
 @torch.no_grad()
-def plot_sde_pushed_images(X, Y, SDE, gray=False):
-    n_row, n_col = 3, int(X.shape[0])
+def plot_sde_pushed_images(X, Y, SDE, gray=False, plot_trajectory=True):
+    n_row = SDE.n_steps + 2 if plot_trajectory else 3
+    n_col = int(X.shape[0])
+    tr_list = [X]
+    if plot_trajectory:
+        trajectory: torch.Tensor = sde_push(
+            SDE, X, return_type="trajectory"
+        )  # tensor(batch, tr, c, h, w)
+        tr_list.extend([trajectory[:, i] for i in range(trajectory.size(1))])
+    else:
+        tr_list.append(sde_push(SDE, X, return_type="XN"))
+    tr_list.append(Y)  # list(tensor(batch, c, h, w))
 
-    T_X = sde_push(SDE, X, return_type="XN")
     imgs = (
-        torch.cat([X, T_X, Y])
+        torch.cat(tr_list)
         .to("cpu")
         .permute(0, 2, 3, 1)
         .mul(0.5)
@@ -303,7 +155,6 @@ def plot_sde_pushed_images(X, Y, SDE, gray=False):
     )
 
     fig, axes = plt.subplots(n_row, n_col, figsize=(1.5 * n_col, 1.5 * n_row), dpi=150)
-
     for i, ax in enumerate(axes.flatten()):
         if gray:
             ax.imshow(imgs[i], cmap="gray", vmin=0, vmax=1)
@@ -312,34 +163,44 @@ def plot_sde_pushed_images(X, Y, SDE, gray=False):
         ax.get_xaxis().set_visible(False)
         ax.set_yticks([])
 
-    axes[0, 0].set_ylabel("X", fontsize=24)
-    axes[1, 0].set_ylabel("T(X)", fontsize=24)
-    axes[2, 0].set_ylabel("Y", fontsize=24)
+    if plot_trajectory:
+        axes[0, 0].set_ylabel("X", fontsize=24)
+        for i in range(1, n_row - 1):
+            axes[i, 0].set_ylabel(f"$T_{i}(X)$", fontsize=24)
+        axes[(n_row - 1), 0].set_ylabel("Y", fontsize=24)
+    else:
+        axes[0, 0].set_ylabel("X", fontsize=24)
+        axes[1, 0].set_ylabel("T(X)", fontsize=24)
+        axes[2, 0].set_ylabel("Y", fontsize=24)
     fig.tight_layout(pad=0.001)
     return fig, axes
 
 
 @torch.no_grad()
 def plot_sde_pushed_random_images(
-    X_sampler, Y_sampler, SDE, plot_n_samples=10, gray=False
+    X_sampler, Y_sampler, SDE, plot_n_samples=10, gray=False, plot_trajectory=True
 ):
     X = X_sampler.sample(plot_n_samples)
     Y = Y_sampler.sample(plot_n_samples)
-    return plot_sde_pushed_images(X, Y, SDE, gray)
+    return plot_sde_pushed_images(X, Y, SDE, gray, plot_trajectory)
 
 
 @torch.no_grad()
 def plot_sde_pushed_random_paired_images(
-    XY_sampler, SDE, plot_n_samples=10, gray=False
+    XY_sampler, SDE, plot_n_samples=10, gray=False, plot_trajectory=True
 ):
     X, Y = XY_sampler.sample(plot_n_samples)
-    return plot_sde_pushed_images(X, Y, SDE, gray=gray)
+    return plot_sde_pushed_images(X, Y, SDE, gray, plot_trajectory)
 
 
 @torch.no_grad()
-def plot_sde_pushed_random_class_images(XY_sampler, SDE, plot_n_samples=10, gray=False):
+def plot_sde_pushed_random_class_images(
+    XY_sampler, SDE, plot_n_samples=10, gray=False, plot_trajectory=True
+):
     X, Y = XY_sampler.sample(plot_n_samples)
-    return plot_sde_pushed_images(X.flatten(0, 1), Y.flatten(0, 1), SDE, gray)
+    return plot_sde_pushed_images(
+        X.flatten(0, 1), Y.flatten(0, 1), SDE, gray, plot_trajectory
+    )
 
 
 # ======================= DENOT(link SDE) push ====================
@@ -347,31 +208,24 @@ def plot_sde_pushed_random_class_images(XY_sampler, SDE, plot_n_samples=10, gray
 def plot_linked_sde_pushed_images(X, Y, SDEs, gray=False, plot_trajectory=True):
     n_row = len(SDEs) + 2 if plot_trajectory else 3
     n_col = int(X.shape[0])
-
+    tr_list = [X]
     if plot_trajectory:
-        tr_list = linked_sde_push(SDEs, X, return_type="trajectory")
-        tr_list.append(Y)
-        imgs = (
-            torch.cat(tr_list)
-            .to("cpu")
-            .permute(0, 2, 3, 1)
-            .mul(0.5)
-            .add(0.5)
-            .numpy()
-            .clip(0, 1)
-        )
+        tr_list.extend(
+            linked_sde_push(SDEs, X, return_type="trajectory")
+        )  # list[tensor(batch, c, h, w)]
     else:
-        T_X = linked_sde_push(SDEs, X, return_type="XN")
-        # print(f"[Debug] {T_X.shape=}")
-        imgs = (
-            torch.cat([X, T_X, Y])
-            .to("cpu")
-            .permute(0, 2, 3, 1)
-            .mul(0.5)
-            .add(0.5)
-            .numpy()
-            .clip(0, 1)
-        )
+        tr_list.append(linked_sde_push(SDEs, X, return_type="XN"))
+    tr_list.append(Y)
+
+    imgs = (
+        torch.cat(tr_list)  # tensor(len(tr_list)*batch, c, h, w)
+        .to("cpu")
+        .permute(0, 2, 3, 1)
+        .mul(0.5)
+        .add(0.5)
+        .numpy()
+        .clip(0, 1)
+    )
 
     fig, axes = plt.subplots(n_row, n_col, figsize=(1.5 * n_col, 1.5 * n_row), dpi=150)
     for i, ax in enumerate(axes.flatten()):

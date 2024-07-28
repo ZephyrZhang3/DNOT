@@ -279,16 +279,16 @@ def EnergyColorDistance(T, XY_sampler, size=2048, batch_size=8, device="cuda"):
 
 # ========== Mapping ================= #
 @torch.no_grad()
-def linked_push(Ts, X: torch.Tensor, return_type="T_X"):  # TX, trajectory
+def linked_push(Ts, X: torch.Tensor, return_type="T_X"):  # T_X, trajectory
     assert return_type in ["T_X", "trajectory"]
     tr_list = [X.clone().detach()]
     for T in Ts:
         T_X = T(tr_list[-1])
         tr_list.append(T_X)
     if return_type == "trajectory":
-        return tr_list
+        return tr_list[1:]  # not contain X, list[tensor(batch, c, h, w)]
     if return_type == "T_X":
-        XN = tr_list[-1].clone().detach()
+        XN = tr_list[-1].clone().detach()  # XN is tensor(batch, c, h, w)
         del tr_list
         gc.collect()
         torch.cuda.empty_cache()
@@ -305,10 +305,10 @@ def sde_push(SDE, X0, return_type="XN"):  # XN, trajectory, all
 
     if return_type == "trajectory":
         del shifts, times
-        return trajectory
+        return trajectory  # trajectory is tensor(batch, tr, c, h, w)
 
     if return_type == "XN":
-        XN = trajectory[:, -1].clone().detach()  # (batch_size, tr, ...)
+        XN = trajectory[:, -1].clone().detach()  # (batch, c, h, w)
         del trajectory, shifts, times
         return XN
 
@@ -322,9 +322,9 @@ def linked_sde_push(SDEs, X0, return_type="XN"):  # XN, trajectory
         tr_list.append(XN)
 
     if return_type == "trajectory":
-        return tr_list
+        return tr_list[1:]  # not contain X0, list[tensor(batch, c, h, w)]
     if return_type == "XN":
-        XN = tr_list[-1].clone().detach()
+        XN = tr_list[-1].clone().detach()  # tensor(batch, c, h, w)
         del tr_list
         gc.collect()
         torch.cuda.empty_cache()
@@ -431,7 +431,55 @@ def get_pushed_loader_stats(
     return mu, sigma
 
 
-# TODO: def get_linked_pushed_loader_stats()
+@torch.no_grad()
+def get_linked_pushed_loader_stats(
+    Ts,
+    loader,
+    batch_size=8,
+    n_epochs=1,
+    verbose=False,
+    device="cuda",
+    use_downloaded_weights=False,
+):
+    dims = 2048
+    block_idx = InceptionV3.BLOCK_INDEX_BY_DIM[dims]
+    model = InceptionV3([block_idx], use_downloaded_weights=use_downloaded_weights).to(
+        device
+    )
+    freeze(model)
+
+    size = len(loader.dataset)
+    pred_arr = []
+
+    if verbose:
+        display_id = display(
+            f"Epoch 0/{n_epochs}: Processing batch 0/{len(loader)}", display_id=True
+        )
+
+    for epoch in range(n_epochs):
+        with torch.no_grad():
+            for step, (X, _) in enumerate(loader):
+                if verbose:
+                    update_display(
+                        f"Epoch {epoch+1}/{n_epochs}: Processing batch {step + 1}/{len(loader)}",
+                        display_id=display_id.display_id,
+                    )
+                for i in range(0, len(X), batch_size):
+                    start, end = i, min(i + batch_size, len(X))
+                    X0 = X[start:end].type(torch.FloatTensor).to(device)
+                    batch = linked_push(Ts, X0, return_type="T_X").add(1).mul(0.5)
+                    assert batch.shape[1] in [1, 3]
+                    if batch.shape[1] == 1:
+                        batch = batch.repeat(1, 3, 1, 1)
+                    pred_arr.append(
+                        model(batch)[0].cpu().data.numpy().reshape(end - start, -1)
+                    )
+
+    pred_arr = np.vstack(pred_arr)
+    mu, sigma = np.mean(pred_arr, axis=0), np.cov(pred_arr, rowvar=False)
+    gc.collect()
+    torch.cuda.empty_cache()
+    return mu, sigma
 
 
 @torch.no_grad()
@@ -588,7 +636,58 @@ def get_pushed_loader_metrics(
     return results
 
 
-# TODO: def get_linked_pushed_loader_metrics()
+@torch.no_grad()
+def get_linked_pushed_loader_metrics(
+    Ts,
+    loader,
+    batch_size=8,
+    n_epochs=1,
+    verbose=False,
+    device="cuda",
+    log_metrics=["LPIPS", "PSNR", "SSIM", "MSE", "MAE"],
+):
+    loss_lpips = LearnedPerceptualImagePatchSimilarity(
+        net_type="vgg", reduction="sum"
+    ).to(device)
+    loss_psnr = PeakSignalNoiseRatio(data_range=(-1, 1), reduction="sum").to(device)
+    loss_ssim = StructuralSimilarityIndexMeasure(
+        data_range=(-1, 1), reduction="sum"
+    ).to(device)
+    loss_mse = MeanSquaredError().to(device)
+    loss_mae = MeanAbsoluteError().to(device)
+
+    metrics = dict(
+        MSE=loss_mse, MAE=loss_mae, LPIPS=loss_lpips, PSNR=loss_psnr, SSIM=loss_ssim
+    )
+    results = dict({metric: 0.0 for metric in metrics.keys()})
+
+    if verbose:
+        display_id = display(
+            f"Epoch 0/{n_epochs}: Processing batch 0/{len(loader)}", display_id=True
+        )
+
+    size = 0
+    for epoch in range(n_epochs):
+        with torch.no_grad():
+            for step, (X, Y) in enumerate(loader):
+                if verbose:
+                    update_display(
+                        f"Epoch {epoch+1}/{n_epochs}: Processing batch {step + 1}/{len(loader)}",
+                        display_id=display_id.display_id,
+                    )
+                X, Y = X.to(device), Y.to(device)
+                size += X.size(0)
+                TX = linked_push(Ts, X, return_type="T_X")
+                for metric, loss in metrics.items():
+                    if metric in log_metrics:
+                        results[metric] += loss(TX, Y)
+
+    for metric, loss in metrics.items():
+        results[metric] /= size
+
+    gc.collect()
+    torch.cuda.empty_cache()
+    return results
 
 
 @torch.no_grad()
@@ -700,7 +799,6 @@ def get_linked_sde_pushed_loader_metrics(
 
 
 # ================== Accuracy =================
-# TODO: device parameter
 @torch.no_grad()
 def get_pushed_loader_accuracy(
     T,
@@ -754,7 +852,52 @@ def get_pushed_loader_accuracy(
     return accuracy
 
 
-# TODO: def get_linked_pushed_loader_accuracy()
+@torch.no_grad()
+def get_linked_pushed_loader_accuracy(
+    Ts, X_test_loader, classifier, batch_size=64, num_workers=0, device="cuda"
+):
+    correct = 0
+    total = 0
+    classifier.to(device)
+
+    transport_results = []
+    real_labels = []
+
+    for X, labels in X_test_loader:
+        X = X.to(device)
+        real_labels.append(labels)
+        XN = linked_push(Ts, X, "X_T")
+        transport_results.append(XN)
+
+    flat_transport_results = [item for sublist in transport_results for item in sublist]
+    flat_real_labels = [y for sublist in real_labels for y in sublist]
+
+    flat_transport_results = torch.stack(
+        [torch.tensor(item) for item in flat_transport_results]
+    )
+    flat_real_labels = torch.tensor(flat_real_labels, dtype=torch.long)
+
+    transport_dataset = torch.utils.data.TensorDataset(
+        flat_transport_results, flat_real_labels
+    )
+    transport_loader = torch.utils.data.DataLoader(
+        transport_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        pin_memory=True,
+    )
+
+    for x, y in transport_loader:
+        x, y = x.to(device), y.to(device)
+        outputs = classifier(x)
+        _, predicted = torch.max(outputs, 1)
+        total += y.size(0)
+        correct += (predicted == y).sum().item()
+
+    accuracy = 100 * correct / total
+    print(f"Accuracy of the network: {accuracy:.3f} %")
+    return accuracy
 
 
 @torch.no_grad()

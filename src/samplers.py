@@ -752,97 +752,97 @@ class SubsetGuidedSampler(Sampler):
         )
 
 
-# TODO: support other subset guided dataset
-def get_subset_guided_sampler(
-    name,
-    path,
-    img_size=64,
-    num_labeled="all",
-    batch_size=64,
-    device="cuda",
-    reverse=False,
-    num_workers=8,
-):
-    if name in ["fmnist2mnist"]:
-        transform = Compose(
-            [
-                Resize((img_size, img_size)),
-                ToTensor(),
-                Normalize((0.5), (0.5)),
-            ]
-        )
+# !TODO: support other subset guided dataset
+# def get_subset_guided_sampler(
+#     name,
+#     path,
+#     img_size=64,
+#     num_labeled="all",
+#     batch_size=64,
+#     device="cuda",
+#     reverse=False,
+#     num_workers=8,
+# ):
+#     if name in ["fmnist2mnist"]:
+#         transform = Compose(
+#             [
+#                 Resize((img_size, img_size)),
+#                 ToTensor(),
+#                 Normalize((0.5), (0.5)),
+#             ]
+#         )
 
-        mnist_train = datasets.MNIST(
-            root=path, train=True, download=True, transform=transform
-        )
-        fashion_train = datasets.FashionMNIST(
-            root=path, train=True, download=True, transform=transform
-        )
-        mnist_test = datasets.MNIST(
-            root=path, train=False, download=True, transform=transform
-        )
-        fashion_test = datasets.FashionMNIST(
-            root=path, train=False, download=True, transform=transform
-        )
+#         mnist_train = datasets.MNIST(
+#             root=path, train=True, download=True, transform=transform
+#         )
+#         fashion_train = datasets.FashionMNIST(
+#             root=path, train=True, download=True, transform=transform
+#         )
+#         mnist_test = datasets.MNIST(
+#             root=path, train=False, download=True, transform=transform
+#         )
+#         fashion_test = datasets.FashionMNIST(
+#             root=path, train=False, download=True, transform=transform
+#         )
 
-        if reverse:
-            train_set = SubsetGuidedDataset(
-                mnist_train, fashion_train, num_labeled=num_labeled
-            )
-            test_set = SubsetGuidedDataset(mnist_test, fashion_test)
-        else:
-            train_set = SubsetGuidedDataset(
-                fashion_train, mnist_train, num_labeled=num_labeled
-            )
-            test_set = SubsetGuidedDataset(fashion_test, mnist_test)
-    elif name == "usps2mnist":
-        transform = Compose(
-            [
-                Resize((img_size, img_size)),
-                ToTensor(),
-                Normalize((0.5), (0.5)),
-            ]
-        )
+#         if reverse:
+#             train_set = SubsetGuidedDataset(
+#                 mnist_train, fashion_train, num_labeled=num_labeled
+#             )
+#             test_set = SubsetGuidedDataset(mnist_test, fashion_test)
+#         else:
+#             train_set = SubsetGuidedDataset(
+#                 fashion_train, mnist_train, num_labeled=num_labeled
+#             )
+#             test_set = SubsetGuidedDataset(fashion_test, mnist_test)
+#     elif name == "usps2mnist":
+#         transform = Compose(
+#             [
+#                 Resize((img_size, img_size)),
+#                 ToTensor(),
+#                 Normalize((0.5), (0.5)),
+#             ]
+#         )
 
-        usps_train = datasets.USPS(
-            root=path, train=True, download=True, transform=transform
-        )
-        mnist_train = datasets.MNIST(
-            root=path, train=True, download=True, transform=transform
-        )
-        usps_test = datasets.USPS(
-            root=path, train=False, download=True, transform=transform
-        )
-        mnist_test = datasets.MNIST(
-            root=path, train=False, download=True, transform=transform
-        )
+#         usps_train = datasets.USPS(
+#             root=path, train=True, download=True, transform=transform
+#         )
+#         mnist_train = datasets.MNIST(
+#             root=path, train=True, download=True, transform=transform
+#         )
+#         usps_test = datasets.USPS(
+#             root=path, train=False, download=True, transform=transform
+#         )
+#         mnist_test = datasets.MNIST(
+#             root=path, train=False, download=True, transform=transform
+#         )
 
-        if reverse:
-            train_set = SubsetGuidedDataset(
-                mnist_train, usps_train, num_labeled=num_labeled
-            )
-            test_set = SubsetGuidedDataset(mnist_test, usps_test)
-        else:
-            train_set = SubsetGuidedDataset(
-                usps_train, mnist_train, num_labeled=num_labeled
-            )
-            test_set = SubsetGuidedDataset(usps_test, mnist_test)
-    else:
-        raise Exception("Unknown dataset")
+#         if reverse:
+#             train_set = SubsetGuidedDataset(
+#                 mnist_train, usps_train, num_labeled=num_labeled
+#             )
+#             test_set = SubsetGuidedDataset(mnist_test, usps_test)
+#         else:
+#             train_set = SubsetGuidedDataset(
+#                 usps_train, mnist_train, num_labeled=num_labeled
+#             )
+#             test_set = SubsetGuidedDataset(usps_test, mnist_test)
+#     else:
+#         raise Exception("Unknown dataset")
 
-    train_sampler = PairedLoaderSampler(
-        DataLoader(
-            train_set, shuffle=True, num_workers=num_workers, batch_size=batch_size
-        ),
-        device,
-    )
-    test_sampler = PairedLoaderSampler(
-        DataLoader(
-            test_set, shuffle=True, num_workers=num_workers, batch_size=batch_size
-        ),
-        device,
-    )
-    return train_sampler, test_sampler
+#     train_sampler = PairedLoaderSampler(
+#         DataLoader(
+#             train_set, shuffle=True, num_workers=num_workers, batch_size=batch_size
+#         ),
+#         device,
+#     )
+#     test_sampler = PairedLoaderSampler(
+#         DataLoader(
+#             test_set, shuffle=True, num_workers=num_workers, batch_size=batch_size
+#         ),
+#         device,
+#     )
+#     return train_sampler, test_sampler
 
 
 # ====================== distributions ====================== #
@@ -916,39 +916,22 @@ class Mix8GaussiansSampler(Sampler):
 
 # ================================================================================= #
 class SwissRollSampler(Sampler):
-    def __init__(self, dim=2, device="cuda"):
+    def __init__(self, noise=0.0, dim=3, device="cuda"):
         super(SwissRollSampler, self).__init__(device=device)
-        assert dim == 2
-        self.dim = 2
-
-    def sample(self, batch_size=10):
-        batch = (
-            sklearn.datasets.make_swiss_roll(n_samples=batch_size, noise=0.8)[0].astype(
-                "float32"
-            )[:, [0, 2]]
-            / 7.5
-        )
-        return torch.tensor(batch, device=self.device)
-
-
-class SwissRoll3DSampler(Sampler):
-    def __init__(self, dim=3, noise=0.5, device="cuda"):
-        super(SwissRoll3DSampler, self).__init__(device=device)
-        assert dim == 3
         self.dim = dim
         self.noise = noise
-        self.colors = None
 
-    def sample(self, batch_size=10):
-        data, colors = sklearn.datasets.make_swiss_roll(
+    def sample(self, batch_size=100):
+        data, index = sklearn.datasets.make_swiss_roll(
             n_samples=batch_size, noise=self.noise
         )
         data = data.astype("float32") / 7.5
-        self.colors = colors
         if self.dim == 3:
             batch = data[:, [0, 1, 2]]
         elif self.dim == 2:
             batch = data[:, [0, 2]]
+        else:
+            raise Exception("Unsupport swiss roll dim, please use 2 or 3")
         return torch.tensor(batch, device=self.device)
 
 
@@ -989,6 +972,17 @@ class MobiusStripSampler(Sampler):
         y += self.noise * (np.random.rand(*y.shape) - 0.5)
         z += self.noise * (np.random.rand(*z.shape) - 0.5)
         return x, y, z
+
+
+class DoubleMoonSampler(Sampler):
+    def __init__(self, noise=0.0, device="cuda"):
+        super(DoubleMoonSampler, self).__init__(device=device)
+        self.noise = noise
+
+    def sample(self, batch_size=100):
+        data, label = sklearn.datasets.make_moons(batch_size, self.noise)
+        batch = data.astype("float32")
+        return torch.tensor(batch, device=self.device)
 
 
 class CubeUniformSampler(Sampler):
