@@ -13,6 +13,7 @@ wheels/
 
 
 datasets
+figs
 saved_models
 logdir
 

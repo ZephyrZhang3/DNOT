@@ -1,4 +1,5 @@
 import gc
+import os
 
 import matplotlib.pyplot as plt
 import torch
@@ -8,7 +9,7 @@ from src.tools import freeze, linked_push, linked_sde_push, sde_push
 
 # ========= GNOT push =========
 @torch.no_grad()
-def plot_pushed_images(X, Y, T, gray=False):
+def plot_pushed_images(X, Y, T, *, gray=False, savefig=False, save_path="./"):
     n_row, n_col = 3, int(X.shape[0])
 
     T_X = T(X)
@@ -35,31 +36,77 @@ def plot_pushed_images(X, Y, T, gray=False):
     axes[1, 0].set_ylabel("T(X)", fontsize=24)
     axes[2, 0].set_ylabel("Y", fontsize=24)
     fig.tight_layout(pad=0.001)
+
+    if savefig:
+        if not os.path.exists(path=save_path):
+            os.makedirs(save_path)
+        for i in range(n_col):
+            extent = (
+                axes[0, i]
+                .get_window_extent()
+                .transformed(fig.dpi_scale_trans.inverted())
+            )
+            fig.savefig(os.path.join(save_path, f"X_{i}.png"), bbox_inches=extent)
+            extent = (
+                axes[1, i]
+                .get_window_extent()
+                .transformed(fig.dpi_scale_trans.inverted())
+            )
+            fig.savefig(os.path.join(save_path, f"T(X)_{i}.png"), bbox_inches=extent)
+            extent = (
+                axes[2, i]
+                .get_window_extent()
+                .transformed(fig.dpi_scale_trans.inverted())
+            )
+            fig.savefig(os.path.join(save_path, f"Y_{i}.png"), bbox_inches=extent)
+
     return fig, axes
 
 
 @torch.no_grad()
-def plot_pushed_random_images(X_sampler, Y_sampler, T, plot_n_samples=10, gray=False):
+def plot_pushed_random_images(
+    X_sampler,
+    Y_sampler,
+    T,
+    plot_n_samples=10,
+    *,
+    gray=False,
+    savefig=False,
+    save_path="./",
+):
     X = X_sampler.sample(plot_n_samples)
     Y = Y_sampler.sample(plot_n_samples)
-    return plot_pushed_images(X, Y, T, gray)
+    return plot_pushed_images(X, Y, T, gray=gray, savefig=savefig, save_path=save_path)
 
 
 @torch.no_grad()
-def plot_pushed_random_paired_images(XY_sampler, T, plot_n_samples=10, gray=False):
+def plot_pushed_random_paired_images(
+    XY_sampler, T, plot_n_samples=10, *, gray=False, savefig=False, save_path="./"
+):
     X, Y = XY_sampler.sample(plot_n_samples)
-    return plot_pushed_images(X, Y, T, gray)
+    return plot_pushed_images(X, Y, T, gray=gray, savefig=savefig, save_path=save_path)
 
 
 @torch.no_grad()
-def plot_pushed_random_class_images(XY_sampler, T, plot_n_samples=10, gray=False):
+def plot_pushed_random_class_images(
+    XY_sampler, T, plot_n_samples=10, *, gray=False, savefig=False, save_path="./"
+):
     X, Y = XY_sampler.sample(plot_n_samples)
-    return plot_pushed_images(X.flatten(0, 1), Y.flatten(0, 1), T, gray)
+    return plot_pushed_images(
+        X.flatten(0, 1),
+        Y.flatten(0, 1),
+        T,
+        gray=gray,
+        savefig=savefig,
+        save_path=save_path,
+    )
 
 
 # ========= DNOT(link GNOT) push =========
 @torch.no_grad()
-def plot_linked_pushed_images(X, Y, Ts, gray=False, plot_trajectory=True):
+def plot_linked_pushed_images(
+    X, Y, Ts, *, gray=False, plot_trajectory=True, savefig=False, save_path="./"
+):
     n_row = len(Ts) + 2 if plot_trajectory else 3
     n_col = int(X.shape[0])
     tr_list = [X]
@@ -99,39 +146,135 @@ def plot_linked_pushed_images(X, Y, Ts, gray=False, plot_trajectory=True):
         axes[1, 0].set_ylabel("T(X)", fontsize=24)
         axes[2, 0].set_ylabel("Y", fontsize=24)
     fig.tight_layout(pad=0.001)
+
+    if savefig:
+        if not os.path.exists(path=save_path):
+            os.makedirs(save_path)
+        if plot_trajectory:
+            for i in range(n_col):
+                extent = (
+                    axes[0, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(os.path.join(save_path, f"X_{i}.png"), bbox_inches=extent)
+                for ri in range(1, n_row - 1):
+                    extent = (
+                        axes[ri, i]
+                        .get_window_extent()
+                        .transformed(fig.dpi_scale_trans.inverted())
+                    )
+                    fig.savefig(
+                        os.path.join(save_path, f"T{ri}(X)_{i}.png"),
+                        bbox_inches=extent,
+                    )
+                extent = (
+                    axes[n_row - 1, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(os.path.join(save_path, f"Y_{i}.png"), bbox_inches=extent)
+        else:
+            for i in range(n_col):
+                extent = (
+                    axes[0, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(os.path.join(save_path, f"X_{i}.png"), bbox_inches=extent)
+                extent = (
+                    axes[1, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(
+                    os.path.join(save_path, f"T(X)_{i}.png"), bbox_inches=extent
+                )
+                extent = (
+                    axes[2, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(os.path.join(save_path, f"Y_{i}.png"), bbox_inches=extent)
     return fig, axes
 
 
 @torch.no_grad()
 def plot_linked_pushed_random_images(
-    X_sampler, Y_sampler, Ts, plot_n_samples=10, gray=False, plot_trajectory=True
+    X_sampler,
+    Y_sampler,
+    Ts,
+    plot_n_samples=10,
+    *,
+    gray=False,
+    plot_trajectory=True,
+    savefig=False,
+    save_path="./",
 ):
     X = X_sampler.sample(plot_n_samples)
     Y = Y_sampler.sample(plot_n_samples)
-    return plot_linked_pushed_images(X, Y, Ts, gray, plot_trajectory)
+    return plot_linked_pushed_images(
+        X,
+        Y,
+        Ts,
+        gray=gray,
+        plot_trajectory=plot_trajectory,
+        savefig=savefig,
+        save_path=save_path,
+    )
 
 
 @torch.no_grad()
 def plot_linked_pushed_random_paired_images(
-    XY_sampler, Ts, plot_n_samples=10, gray=False, plot_trajectory=True
+    XY_sampler,
+    Ts,
+    plot_n_samples=10,
+    *,
+    gray=False,
+    plot_trajectory=True,
+    savefig=False,
+    save_path="./",
 ):
     X, Y = XY_sampler.sample(plot_n_samples)
-    return plot_linked_pushed_images(X, Y, Ts, gray, plot_trajectory)
+    return plot_linked_pushed_images(
+        X,
+        Y,
+        Ts,
+        gray=gray,
+        plot_trajectory=plot_trajectory,
+        savefig=savefig,
+        save_path=save_path,
+    )
 
 
 @torch.no_grad()
 def plot_linked_pushed_random_class_images(
-    XY_sampler, Ts, plot_n_samples=10, gray=False, plot_trajectory=True
+    XY_sampler,
+    Ts,
+    plot_n_samples=10,
+    *,
+    gray=False,
+    plot_trajectory=True,
+    savefig=False,
+    save_path="./",
 ):
     X, Y = XY_sampler.sample(plot_n_samples)
     return plot_linked_pushed_images(
-        X.flatten(0, 1), Y.flatten(0, 1), Ts, gray, plot_trajectory
+        X.flatten(0, 1),
+        Y.flatten(0, 1),
+        Ts,
+        gray=gray,
+        plot_trajectory=plot_trajectory,
+        savefig=savefig,
+        save_path=save_path,
     )
 
 
 # ========= ENOT(SDE) push =========
 @torch.no_grad()
-def plot_sde_pushed_images(X, Y, SDE, gray=False, plot_trajectory=True):
+def plot_sde_pushed_images(
+    X, Y, SDE, *, gray=False, plot_trajectory=True, savefig=False, save_path="./"
+):
     n_row = SDE.n_steps + 2 if plot_trajectory else 3
     n_col = int(X.shape[0])
     tr_list = [X]
@@ -173,39 +316,135 @@ def plot_sde_pushed_images(X, Y, SDE, gray=False, plot_trajectory=True):
         axes[1, 0].set_ylabel("T(X)", fontsize=24)
         axes[2, 0].set_ylabel("Y", fontsize=24)
     fig.tight_layout(pad=0.001)
+
+    if savefig:
+        if not os.path.exists(path=save_path):
+            os.makedirs(save_path)
+        if plot_trajectory:
+            for i in range(n_col):
+                extent = (
+                    axes[0, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(os.path.join(save_path, f"X_{i}.png"), bbox_inches=extent)
+                for ri in range(1, n_row - 1):
+                    extent = (
+                        axes[ri, i]
+                        .get_window_extent()
+                        .transformed(fig.dpi_scale_trans.inverted())
+                    )
+                    fig.savefig(
+                        os.path.join(save_path, f"T{ri}(X)_{i}.png"),
+                        bbox_inches=extent,
+                    )
+                extent = (
+                    axes[n_row - 1, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(os.path.join(save_path, f"Y_{i}.png"), bbox_inches=extent)
+        else:
+            for i in range(n_col):
+                extent = (
+                    axes[0, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(os.path.join(save_path, f"X_{i}.png"), bbox_inches=extent)
+                extent = (
+                    axes[1, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(
+                    os.path.join(save_path, f"T(X)_{i}.png"), bbox_inches=extent
+                )
+                extent = (
+                    axes[2, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(os.path.join(save_path, f"Y_{i}.png"), bbox_inches=extent)
     return fig, axes
 
 
 @torch.no_grad()
 def plot_sde_pushed_random_images(
-    X_sampler, Y_sampler, SDE, plot_n_samples=10, gray=False, plot_trajectory=True
+    X_sampler,
+    Y_sampler,
+    SDE,
+    plot_n_samples=10,
+    *,
+    gray=False,
+    plot_trajectory=True,
+    savefig=False,
+    save_path="./",
 ):
     X = X_sampler.sample(plot_n_samples)
     Y = Y_sampler.sample(plot_n_samples)
-    return plot_sde_pushed_images(X, Y, SDE, gray, plot_trajectory)
+    return plot_sde_pushed_images(
+        X,
+        Y,
+        SDE,
+        gray=gray,
+        plot_trajectory=plot_trajectory,
+        savefig=savefig,
+        save_path=save_path,
+    )
 
 
 @torch.no_grad()
 def plot_sde_pushed_random_paired_images(
-    XY_sampler, SDE, plot_n_samples=10, gray=False, plot_trajectory=True
+    XY_sampler,
+    SDE,
+    plot_n_samples=10,
+    *,
+    gray=False,
+    plot_trajectory=True,
+    savefig=False,
+    save_path="./",
 ):
     X, Y = XY_sampler.sample(plot_n_samples)
-    return plot_sde_pushed_images(X, Y, SDE, gray, plot_trajectory)
+    return plot_sde_pushed_images(
+        X,
+        Y,
+        SDE,
+        gray=gray,
+        plot_trajectory=plot_trajectory,
+        savefig=savefig,
+        save_path=save_path,
+    )
 
 
 @torch.no_grad()
 def plot_sde_pushed_random_class_images(
-    XY_sampler, SDE, plot_n_samples=10, gray=False, plot_trajectory=True
+    XY_sampler,
+    SDE,
+    plot_n_samples=10,
+    *,
+    gray=False,
+    plot_trajectory=True,
+    savefig=False,
+    save_path="./",
 ):
     X, Y = XY_sampler.sample(plot_n_samples)
     return plot_sde_pushed_images(
-        X.flatten(0, 1), Y.flatten(0, 1), SDE, gray, plot_trajectory
+        X.flatten(0, 1),
+        Y.flatten(0, 1),
+        SDE,
+        gray=gray,
+        plot_trajectory=plot_trajectory,
+        savefig=savefig,
+        save_path=save_path,
     )
 
 
 # ======================= DENOT(link SDE) push ====================
 @torch.no_grad()
-def plot_linked_sde_pushed_images(X, Y, SDEs, gray=False, plot_trajectory=True):
+def plot_linked_sde_pushed_images(
+    X, Y, SDEs, *, gray=False, plot_trajectory=True, savefig=False, save_path="./"
+):
     n_row = len(SDEs) + 2 if plot_trajectory else 3
     n_col = int(X.shape[0])
     tr_list = [X]
@@ -246,33 +485,127 @@ def plot_linked_sde_pushed_images(X, Y, SDEs, gray=False, plot_trajectory=True):
         axes[1, 0].set_ylabel("T(X)", fontsize=24)
         axes[2, 0].set_ylabel("Y", fontsize=24)
     fig.tight_layout(pad=0.001)
+
+    if savefig:
+        if not os.path.exists(path=save_path):
+            os.makedirs(save_path)
+        if plot_trajectory:
+            for i in range(n_col):
+                extent = (
+                    axes[0, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(os.path.join(save_path, f"X_{i}.png"), bbox_inches=extent)
+                for ri in range(1, n_row - 1):
+                    extent = (
+                        axes[ri, i]
+                        .get_window_extent()
+                        .transformed(fig.dpi_scale_trans.inverted())
+                    )
+                    fig.savefig(
+                        os.path.join(save_path, f"T{ri}(X)_{i}.png"),
+                        bbox_inches=extent,
+                    )
+                extent = (
+                    axes[n_row - 1, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(os.path.join(save_path, f"Y_{i}.png"), bbox_inches=extent)
+        else:
+            for i in range(n_col):
+                extent = (
+                    axes[0, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(os.path.join(save_path, f"X_{i}.png"), bbox_inches=extent)
+                extent = (
+                    axes[1, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(
+                    os.path.join(save_path, f"T(X)_{i}.png"), bbox_inches=extent
+                )
+                extent = (
+                    axes[2, i]
+                    .get_window_extent()
+                    .transformed(fig.dpi_scale_trans.inverted())
+                )
+                fig.savefig(os.path.join(save_path, f"Y_{i}.png"), bbox_inches=extent)
     return fig, axes
 
 
 @torch.no_grad()
 def plot_linked_sde_pushed_random_images(
-    X_sampler, Y_sampler, SDEs, plot_n_samples=10, gray=False, plot_trajectory=True
+    X_sampler,
+    Y_sampler,
+    SDEs,
+    plot_n_samples=10,
+    *,
+    gray=False,
+    plot_trajectory=True,
+    savefig=False,
+    save_path="./",
 ):
     X = X_sampler.sample(plot_n_samples)
     Y = Y_sampler.sample(plot_n_samples)
-    return plot_linked_sde_pushed_images(X, Y, SDEs, gray, plot_trajectory)
+    return plot_linked_sde_pushed_images(
+        X,
+        Y,
+        SDEs,
+        gray=gray,
+        plot_trajectory=plot_trajectory,
+        savefig=savefig,
+        save_path=save_path,
+    )
 
 
 @torch.no_grad()
 def plot_linked_sde_pushed_random_paired_images(
-    XY_sampler, SDEs, plot_n_samples=10, gray=False, plot_trajectory=True
+    XY_sampler,
+    SDEs,
+    plot_n_samples=10,
+    *,
+    gray=False,
+    plot_trajectory=True,
+    savefig=False,
+    save_path="./",
 ):
     X, Y = XY_sampler.sample(plot_n_samples)
-    return plot_linked_sde_pushed_images(X, Y, SDEs, gray, plot_trajectory)
+    return plot_linked_sde_pushed_images(
+        X,
+        Y,
+        SDEs,
+        gray=gray,
+        plot_trajectory=plot_trajectory,
+        savefig=savefig,
+        save_path=save_path,
+    )
 
 
 @torch.no_grad()
 def plot_linked_sde_pushed_random_class_images(
-    XY_sampler, SDEs, plot_n_samples=10, gray=False, plot_trajectory=True
+    XY_sampler,
+    SDEs,
+    plot_n_samples=10,
+    *,
+    gray=False,
+    plot_trajectory=True,
+    savefig=False,
+    save_path="./",
 ):
     X, Y = XY_sampler.sample(plot_n_samples)
     return plot_linked_sde_pushed_images(
-        X.flatten(0, 1), Y.flatten(0, 1), SDEs, gray, plot_trajectory
+        X.flatten(0, 1),
+        Y.flatten(0, 1),
+        SDEs,
+        gray=gray,
+        plot_trajectory=plot_trajectory,
+        savefig=savefig,
+        save_path=save_path,
     )
 
 
