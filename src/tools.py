@@ -19,6 +19,31 @@ from torchmetrics.regression import MeanAbsoluteError, MeanSquaredError
 from src.inception import InceptionV3
 
 
+def get_all_pivotal(source, target, dm_scheduler, pivotal_list):
+    pivotal_path = []
+
+    source_list = [source]
+    target_list = [target]
+    for i in range(min(dm_scheduler.num_train_timesteps, pivotal_list[-1])):
+        source = dm_scheduler.add_noise(
+            source, torch.randn_like(source), torch.Tensor([i]).long()
+        )
+        target = dm_scheduler.add_noise(
+            target, torch.randn_like(target), torch.Tensor([i]).long()
+        )
+        if (i + 1) in pivotal_list:
+            source_list.append(source)
+            target_list.append(target)
+
+    target_list.reverse()
+
+    pivotal_path.extend(source_list)
+    pivotal_path.extend(target_list[1:])  # just using source's last pivotal point
+    # pivotal_path.extend(target_list[:]) # 2 last pivotal points mapping
+
+    return pivotal_path
+
+
 def ema_update(model_tgt, model_src, beta=0.999):
     with torch.no_grad():
         param_dict_src = dict(model_src.named_parameters())
